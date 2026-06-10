@@ -8,18 +8,23 @@ export default function Bio() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Only fetch featured links for the bio page
+    // Fetch all links ordered by createdAt, then filter client-side 
+    // to avoid needing a Firestore composite index.
     const q = query(
       collection(db, "links"), 
-      where("isFeatured", "==", true),
       orderBy("createdAt", "desc")
     );
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setLinks(snapshot.docs.map(doc => ({
+      const allLinks = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      })));
+      }));
+      // Filter only featured items
+      setLinks(allLinks.filter(link => link.isFeatured === true));
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching bio links: ", error);
       setLoading(false);
     });
 
