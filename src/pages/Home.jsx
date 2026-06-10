@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Search, ShoppingCart, Star } from 'lucide-react';
+import { Search, ShoppingCart, Star, Share, Image as ImageIcon } from 'lucide-react';
 
 const CATEGORIES = ["All", "General", "Electronics", "Desk Setup", "Home", "Fashion"];
 
@@ -33,6 +33,25 @@ export default function Home() {
 
     return () => unsubscribe();
   }, []);
+
+  const handleShare = async (e, link) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const shareUrl = `${window.location.origin}/link/${link.id}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: link.title,
+          url: shareUrl
+        });
+      } catch (err) {
+        console.log("Error sharing", err);
+      }
+    } else {
+      navigator.clipboard.writeText(shareUrl);
+      alert("Link copied to clipboard!");
+    }
+  };
 
   // Filter and Sort Logic
   let processedLinks = links.filter(link => {
@@ -198,8 +217,16 @@ export default function Home() {
                         ID: {link.id}
                       </div>
                       
-                      <div style={{ marginTop: 'auto' }}>
-                        <a href={`/link/${link.id}`} className="btn btn-primary" style={{ width: '100%', textDecoration: 'none' }}>
+                      <div style={{ marginTop: 'auto', display: 'flex', gap: '10px' }}>
+                        <button 
+                          onClick={(e) => handleShare(e, link)}
+                          className="btn btn-secondary"
+                          style={{ padding: '8px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title="Share / Copy Link"
+                        >
+                          <Share size={20} color="#565959" />
+                        </button>
+                        <a href={`/link/${link.id}`} className="btn btn-primary" style={{ flex: 1, textDecoration: 'none', textAlign: 'center' }}>
                           View Deal
                         </a>
                       </div>

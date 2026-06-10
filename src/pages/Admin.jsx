@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, LogOut, LayoutDashboard, Image as ImageIcon, MousePointerClick, Star, Search, TrendingUp, Edit2, X } from 'lucide-react';
+import { Plus, Trash2, LogOut, LayoutDashboard, Image as ImageIcon, MousePointerClick, Star, Search, TrendingUp, Edit2, X, Copy, CheckCircle2 } from 'lucide-react';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { collection, deleteDoc, doc, onSnapshot, query, orderBy, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -26,6 +26,13 @@ export default function Admin() {
     category: 'General',
     isFeatured: false
   });
+
+  const [toastMessage, setToastMessage] = useState('');
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 3000);
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -80,6 +87,7 @@ export default function Admin() {
             category: newLink.category || 'General',
             isFeatured: newLink.isFeatured || false,
           });
+          showToast('Product updated successfully!');
         } else {
           // Add new
           const autoId = generateShortId();
@@ -94,6 +102,7 @@ export default function Admin() {
             dailyClicks: {},
             createdAt: new Date().toISOString()
           });
+          showToast('Product added successfully!');
         }
         
         // Reset form
@@ -101,7 +110,7 @@ export default function Admin() {
         setNewLink({ title: '', url: '', imageUrl: '', price: '', category: 'General', isFeatured: false });
       } catch (error) {
         console.error("Error saving document: ", error);
-        alert("Failed to save link. Make sure Firestore rules allow writing.");
+        showToast("Failed to save product.");
       }
     }
   };
@@ -129,6 +138,7 @@ export default function Admin() {
     if (window.confirm("Are you sure you want to delete this product?")) {
       try {
         await deleteDoc(doc(db, "links", id));
+        showToast('Product deleted.');
         if (editingId === id) {
           handleCancelEdit();
         }
@@ -136,6 +146,12 @@ export default function Admin() {
         console.error("Error deleting document: ", error);
       }
     }
+  };
+
+  const handleCopyLink = (id) => {
+    const url = `${window.location.origin}/link/${id}`;
+    navigator.clipboard.writeText(url);
+    showToast('Shortlink copied to clipboard!');
   };
 
   const filteredLinks = links.filter(link => 
@@ -211,6 +227,15 @@ export default function Admin() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f2f2f2' }}>
+      
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#007185', color: 'white', padding: '12px 24px', borderRadius: '8px', zIndex: 1000, display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontWeight: 'bold' }}>
+          <CheckCircle2 size={20} />
+          {toastMessage}
+        </div>
+      )}
+
       <header style={{ backgroundColor: 'var(--amz-nav-bg)', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: '#ffa41c' }}>
           <LayoutDashboard size={24} />
@@ -360,6 +385,9 @@ export default function Admin() {
                       <MousePointerClick size={16} /> {link.clicks || 0} Clicks
                     </div>
                     <div style={{ display: 'flex', gap: '10px' }}>
+                      <button onClick={() => handleCopyLink(link.id)} className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Copy size={14} /> Copy
+                      </button>
                       <button onClick={() => handleEdit(link)} className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Edit2 size={14} /> Edit
                       </button>
