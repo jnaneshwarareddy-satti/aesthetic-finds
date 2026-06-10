@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, LogOut, LayoutDashboard, Image as ImageIcon, MousePointerClick, Star, Search, TrendingUp } from 'lucide-react';
+import { Plus, Trash2, LogOut, LayoutDashboard, Image as ImageIcon, MousePointerClick, Star, Search, TrendingUp, Edit2, X } from 'lucide-react';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, deleteDoc, doc, onSnapshot, query, orderBy, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, query, orderBy, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -16,6 +16,8 @@ export default function Admin() {
   
   const [links, setLinks] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  const [editingId, setEditingId] = useState(null);
   const [newLink, setNewLink] = useState({ 
     title: '', 
     url: '', 
@@ -63,35 +65,76 @@ export default function Admin() {
 
   const generateShortId = () => Math.random().toString(36).substring(2, 8).toUpperCase();
 
-  const handleAddLink = async (e) => {
+  const handleAddOrUpdateLink = async (e) => {
     e.preventDefault();
     if (newLink.title && newLink.url) {
       try {
-        const autoId = generateShortId();
-        await setDoc(doc(db, "links", autoId), {
-          title: newLink.title,
-          url: newLink.url,
-          imageUrl: newLink.imageUrl || null,
-          price: newLink.price || '0.00',
-          category: newLink.category || 'General',
-          isFeatured: newLink.isFeatured || false,
-          clicks: 0,
-          dailyClicks: {},
-          createdAt: new Date().toISOString()
-        });
+        if (editingId) {
+          // Update existing
+          const docRef = doc(db, "links", editingId);
+          await updateDoc(docRef, {
+            title: newLink.title,
+            url: newLink.url,
+            imageUrl: newLink.imageUrl || null,
+            price: newLink.price || '0.00',
+            category: newLink.category || 'General',
+            isFeatured: newLink.isFeatured || false,
+          });
+        } else {
+          // Add new
+          const autoId = generateShortId();
+          await setDoc(doc(db, "links", autoId), {
+            title: newLink.title,
+            url: newLink.url,
+            imageUrl: newLink.imageUrl || null,
+            price: newLink.price || '0.00',
+            category: newLink.category || 'General',
+            isFeatured: newLink.isFeatured || false,
+            clicks: 0,
+            dailyClicks: {},
+            createdAt: new Date().toISOString()
+          });
+        }
+        
+        // Reset form
+        setEditingId(null);
         setNewLink({ title: '', url: '', imageUrl: '', price: '', category: 'General', isFeatured: false });
       } catch (error) {
-        console.error("Error adding document: ", error);
-        alert("Failed to add link. Make sure Firestore rules allow writing.");
+        console.error("Error saving document: ", error);
+        alert("Failed to save link. Make sure Firestore rules allow writing.");
       }
     }
   };
 
+  const handleEdit = (link) => {
+    setEditingId(link.id);
+    setNewLink({
+      title: link.title || '',
+      url: link.url || '',
+      imageUrl: link.imageUrl || '',
+      price: link.price || '',
+      category: link.category || 'General',
+      isFeatured: link.isFeatured || false,
+    });
+    // Scroll to top to see the form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setNewLink({ title: '', url: '', imageUrl: '', price: '', category: 'General', isFeatured: false });
+  };
+
   const handleDelete = async (id) => {
-    try {
-      await deleteDoc(doc(db, "links", id));
-    } catch (error) {
-      console.error("Error deleting document: ", error);
+    if (window.confirm("Are you sure you want to delete this product?")) {
+      try {
+        await deleteDoc(doc(db, "links", id));
+        if (editingId === id) {
+          handleCancelEdit();
+        }
+      } catch (error) {
+        console.error("Error deleting document: ", error);
+      }
     }
   };
 
@@ -200,12 +243,12 @@ export default function Admin() {
         </div>
 
         <div className="admin-grid">
-          {/* Add Product Form */}
-          <div className="card" style={{ padding: '20px', height: 'fit-content' }}>
-            <h3 style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.2rem', fontWeight: '400' }}>
-              <Plus size={20} /> Add New Product
+          {/* Add/Edit Product Form */}
+          <div className="card" style={{ padding: '20px', height: 'fit-content', border: editingId ? '2px solid #007185' : '1px solid var(--amz-border)' }}>
+            <h3 style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.2rem', fontWeight: '400', color: editingId ? '#007185' : 'inherit' }}>
+              {editingId ? <><Edit2 size={20} /> Edit Product</> : <><Plus size={20} /> Add New Product</>}
             </h3>
-            <form onSubmit={handleAddLink} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            <form onSubmit={handleAddOrUpdateLink} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem', fontWeight: 'bold' }}>Product Title</label>
                 <input type="text" className="input-field" value={newLink.title} onChange={e => setNewLink({...newLink, title: e.target.value})} required />
@@ -245,7 +288,17 @@ export default function Admin() {
                   <img src={newLink.imageUrl} alt="Preview" style={{ height: '100%', objectFit: 'contain' }} onError={(e) => e.target.style.display = 'none'} />
                 </div>
               )}
-              <button type="submit" className="btn btn-primary" style={{ marginTop: '10px' }}>Add Product</button>
+              
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                  {editingId ? 'Update Product' : 'Add Product'}
+                </button>
+                {editingId && (
+                  <button type="button" className="btn btn-secondary" onClick={handleCancelEdit} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
+                    <X size={16} /> Cancel
+                  </button>
+                )}
+              </div>
             </form>
           </div>
 
@@ -274,7 +327,7 @@ export default function Admin() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
               {currentItems.map(link => (
-                <div key={link.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', border: '1px solid #d5d9d9', borderRadius: '4px', backgroundColor: '#fff', position: 'relative', flexWrap: 'wrap', gap: '15px' }}>
+                <div key={link.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', border: editingId === link.id ? '2px solid #007185' : '1px solid #d5d9d9', borderRadius: '4px', backgroundColor: editingId === link.id ? '#f2fbff' : '#fff', position: 'relative', flexWrap: 'wrap', gap: '15px' }}>
                   
                   {link.isFeatured && (
                     <div style={{ position: 'absolute', top: 0, right: 0, backgroundColor: 'var(--amz-nav-bg)', color: 'white', padding: '2px 8px', fontSize: '0.7rem', borderRadius: '0 4px 0 4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -306,9 +359,14 @@ export default function Admin() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px', backgroundColor: '#e7f4f5', color: '#007185', padding: '4px 10px', borderRadius: '100px', fontSize: '0.9rem', fontWeight: 'bold' }}>
                       <MousePointerClick size={16} /> {link.clicks || 0} Clicks
                     </div>
-                    <button onClick={() => handleDelete(link.id)} className="btn btn-secondary" style={{ color: '#B12704', padding: '6px 10px', fontSize: '0.8rem' }}>
-                      <Trash2 size={14} /> Delete
-                    </button>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button onClick={() => handleEdit(link)} className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Edit2 size={14} /> Edit
+                      </button>
+                      <button onClick={() => handleDelete(link.id)} className="btn btn-secondary" style={{ color: '#B12704', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Trash2 size={14} /> Delete
+                      </button>
+                    </div>
                   </div>
 
                 </div>
